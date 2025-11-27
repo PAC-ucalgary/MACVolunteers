@@ -111,6 +111,10 @@
       <label>Confirm Password
         <input type="password" id="su-pass2">
       </label>
+      <label style="font-size:0.85rem;">
+        <input type="checkbox" id="su-show-pass">
+        Show passwords
+      </label>
       <button id="btn-signup">Create Account</button>
       <div id="signup-msg" class="message"></div>
       <p style="font-size:0.85rem;margin-top:8px;">
@@ -125,6 +129,10 @@
       </label>
       <label>Password
         <input type="password" id="login-pass">
+      </label>
+      <label style="font-size:0.85rem;">
+        <input type="checkbox" id="login-show-pass">
+        Show password
       </label>
       <button id="btn-login">Login</button>
       <div id="login-msg" class="message"></div>
@@ -234,7 +242,23 @@
       el.classList.remove("error", "success");
       el.classList.add(isError ? "error" : "success");
     }
-
+    // ===== Password show/hide toggles =====
+    const suShow = document.getElementById("su-show-pass");
+    if (suShow) {
+      suShow.addEventListener("change", () => {
+        const type = suShow.checked ? "text" : "password";
+        document.getElementById("su-pass").type = type;
+        document.getElementById("su-pass2").type = type;
+      });
+    }
+    
+    const loginShow = document.getElementById("login-show-pass");
+    if (loginShow) {
+      loginShow.addEventListener("change", () => {
+        const type = loginShow.checked ? "text" : "password";
+        document.getElementById("login-pass").type = type;
+      });
+    }
     function clearMessage(el) {
       el.textContent = "";
       el.classList.remove("error", "success");
@@ -344,7 +368,11 @@
         );
       } catch (err) {
         console.error(err);
-        showMessage(msgEl, err.message || "Error creating account.", true);
+        let message = "Error creating account.";
+        if (err.code === "auth/email-already-in-use") {
+          message = "This email is already registered. Please log in instead.";
+        }
+        showMessage(msgEl, message, true);
       }
     });
 
@@ -364,19 +392,30 @@
       try {
         const cred = await signInWithEmailAndPassword(auth, email, pass);
         const user = cred.user;
+    
         if (!user.emailVerified) {
+          // Send (or resend) verification email
+          await sendEmailVerification(user);
           showMessage(
             msgEl,
-            "Your email is not verified. Please check your inbox and verify, then log in again.",
+            "Your email is not verified. We've just sent you a new verification email. " +
+            "Please check your inbox (and spam folder), click the link, then log in again.",
             true
           );
           await signOut(auth);
           return;
         }
-        // onAuthStateChanged will handle the rest
+    
+        // If verified, onAuthStateChanged will load the app
       } catch (err) {
         console.error(err);
-        showMessage(msgEl, err.message || "Login failed.", true);
+        let msg = "Login failed.";
+        if (err.code === "auth/user-not-found") {
+          msg = "No account found with that email. Try signing up first.";
+        } else if (err.code === "auth/wrong-password") {
+          msg = "Incorrect password. Please try again.";
+        }
+        showMessage(msgEl, msg, true);
       }
     });
 
@@ -652,3 +691,4 @@
   </script>
 </body>
 </html>
+
