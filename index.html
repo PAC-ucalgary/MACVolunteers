@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Community Volunteering Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1, h2, h3 {
+      color: #333;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-top: 8px;
+      font-size: 0.9rem;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    button {
+      margin-top: 12px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      font-size: 0.9rem;
+    }
+    button.secondary {
+      background: #6c757d;
+      margin-left: 8px;
+    }
+    .hidden {
+      display: none;
+    }
+    .flex-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .flex-row > div {
+      flex: 1;
+      min-width: 150px;
+    }
+    .message {
+      margin-top: 8px;
+      font-size: 0.9rem;
+    }
+    .message.error {
+      color: #d9534f;
+    }
+    .message.success {
+      color: #28a745;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+    }
+    th {
+      background: #eee;
+    }
+  </style>
+</head>
+<body>
+  <h1>Community Volunteering Portal</h1>
+
+  <!-- Authentication section -->
+  <div id="auth-section">
+    <div class="card">
+      <h2>Sign Up</h2>
+      <label>First Name
+        <input type="text" id="su-first">
+      </label>
+      <label>Last Name
+        <input type="text" id="su-last">
+      </label>
+      <label>Phone
+        <input type="text" id="su-phone">
+      </label>
+      <label>Email
+        <input type="email" id="su-email">
+      </label>
+      <label>Password
+        <input type="password" id="su-pass">
+      </label>
+      <label>Confirm Password
+        <input type="password" id="su-pass2">
+      </label>
+      <button id="btn-signup">Create Account</button>
+      <div id="signup-msg" class="message"></div>
+      <p style="font-size:0.85rem;margin-top:8px;">
+        After signing up, you will receive an email. Please click the verification link before logging in.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Login</h2>
+      <label>Email
+        <input type="email" id="login-email">
+      </label>
+      <label>Password
+        <input type="password" id="login-pass">
+      </label>
+      <button id="btn-login">Login</button>
+      <div id="login-msg" class="message"></div>
+    </div>
+  </div>
+
+  <!-- Main app section -->
+  <div id="app-section" class="hidden">
+    <div class="card">
+      <div class="flex-row">
+        <div>
+          <h2 id="welcome"></h2>
+          <div id="role-label"></div>
+          <div id="hours-display" style="margin-top:8px;"></div>
+        </div>
+        <div style="text-align:right;">
+          <button id="btn-logout" class="secondary">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="admin-panel" class="card hidden">
+      <h2>Admin – Create Event</h2>
+      <label>Title
+        <input type="text" id="ev-title">
+      </label>
+      <label>Description
+        <textarea id="ev-desc"></textarea>
+      </label>
+      <label>Date (e.g. 2025-12-01)
+        <input type="text" id="ev-date">
+      </label>
+      <label>Location
+        <input type="text" id="ev-location">
+      </label>
+      <label>
+        <input type="checkbox" id="ev-multi"> This event has multiple shifts/roles
+      </label>
+
+      <div id="shifts-container">
+        <h3>Shifts / Roles</h3>
+        <div id="shift-list"></div>
+        <button id="btn-add-shift" type="button">Add Shift</button>
+        <p style="font-size:0.85rem;margin-top:4px;">
+          For each shift, fill in role name (e.g. Setup), start & end times (optional), and hours.
+        </p>
+      </div>
+
+      <button id="btn-create-event">Save Event</button>
+      <div id="admin-msg" class="message"></div>
+    </div>
+
+    <!-- Volunteer Panel -->
+    <div id="volunteer-panel" class="card">
+      <h2>Available Events</h2>
+      <div id="events-list">Loading events...</div>
+    </div>
+  </div>
+
+  <!-- Firebase + App Logic -->
+  <script type="module">
+    // ===== Firebase imports (v9 modular) =====
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import {
+      getAuth,
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword,
+      onAuthStateChanged,
+      sendEmailVerification,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      getDoc,
+      collection,
+      addDoc,
+      getDocs,
+      query,
+      where
+    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+
+    // ===== 1) Firebase init =====
+    // TODO: paste your firebaseConfig here:
+    const firebaseConfig = {
+    apiKey: "AIzaSyBKoUKz5ISL5jO0f3xNWy_FqrD5OFG11Ls",
+    authDomain: "mac-volunteering.firebaseapp.com",
+    projectId: "mac-volunteering",
+    storageBucket: "mac-volunteering.firebasestorage.app",
+    messagingSenderId: "1006766148178",
+    appId: "1:1006766148178:web:f5f0ac1e15680bcb6ead8b",
+    measurementId: "G-51WQLD4TXR"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // ===== 2) Global state =====
+    let currentUserProfile = null; // {uid, email, firstName, lastName, isAdmin, phone}
+
+    // ===== 3) Helper functions =====
+    function showMessage(el, msg, isError = false) {
+      el.textContent = msg;
+      el.classList.remove("error", "success");
+      el.classList.add(isError ? "error" : "success");
+    }
+
+    function clearMessage(el) {
+      el.textContent = "";
+      el.classList.remove("error", "success");
+    }
+
+    function addShiftRow(role = "", start = "", end = "", hours = "") {
+      const container = document.getElementById("shift-list");
+      const row = document.createElement("div");
+      row.className = "flex-row";
+      row.innerHTML = `
+        <div>
+          <label>Role
+            <input type="text" class="shift-role" value="${role}">
+          </label>
+        </div>
+        <div>
+          <label>Start (HH:MM)
+            <input type="text" class="shift-start" value="${start}">
+          </label>
+        </div>
+        <div>
+          <label>End (HH:MM)
+            <input type="text" class="shift-end" value="${end}">
+          </label>
+        </div>
+        <div>
+          <label>Hours
+            <input type="number" step="0.1" class="shift-hours" value="${hours}">
+          </label>
+        </div>
+      `;
+      container.appendChild(row);
+    }
+
+    function showAppUI() {
+      const authSection = document.getElementById("auth-section");
+      const appSection = document.getElementById("app-section");
+      const welcome = document.getElementById("welcome");
+      const roleLabel = document.getElementById("role-label");
+      const adminPanel = document.getElementById("admin-panel");
+
+      authSection.classList.add("hidden");
+      appSection.classList.remove("hidden");
+
+      if (currentUserProfile) {
+        welcome.textContent =
+          `Welcome, ${currentUserProfile.firstName} ${currentUserProfile.lastName}`;
+        roleLabel.textContent = currentUserProfile.isAdmin
+          ? "Role: Admin"
+          : "Role: Volunteer";
+        if (currentUserProfile.isAdmin) {
+          adminPanel.classList.remove("hidden");
+        } else {
+          adminPanel.classList.add("hidden");
+        }
+      }
+    }
+
+    function showAuthUI() {
+      document.getElementById("auth-section").classList.remove("hidden");
+      document.getElementById("app-section").classList.add("hidden");
+    }
+
+    // ===== 4) Signup =====
+    const btnSignup = document.getElementById("btn-signup");
+    btnSignup.addEventListener("click", async () => {
+      const first = document.getElementById("su-first").value.trim();
+      const last = document.getElementById("su-last").value.trim();
+      const phone = document.getElementById("su-phone").value.trim();
+      const email = document.getElementById("su-email").value.trim();
+      const pass = document.getElementById("su-pass").value;
+      const pass2 = document.getElementById("su-pass2").value;
+      const msgEl = document.getElementById("signup-msg");
+
+      clearMessage(msgEl);
+
+      if (!first || !last || !phone || !email || !pass || !pass2) {
+        showMessage(msgEl, "Please fill in all fields.", true);
+        return;
+      }
+      if (pass !== pass2) {
+        showMessage(msgEl, "Passwords do not match.", true);
+        return;
+      }
+
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, pass);
+        const user = cred.user;
+
+        // Create user profile in Firestore
+        await setDoc(doc(db, "users", user.uid), {
+          firstName: first,
+          lastName: last,
+          phone: phone,
+          email: email,
+          isAdmin: false, // You will manually set this to true for admins later
+          createdAt: new Date().toISOString()
+        });
+
+        // Send verification email
+        await sendEmailVerification(user);
+
+        showMessage(
+          msgEl,
+          "Account created. Please check your email and click the verification link before logging in.",
+          false
+        );
+      } catch (err) {
+        console.error(err);
+        showMessage(msgEl, err.message || "Error creating account.", true);
+      }
+    });
+
+    // ===== 5) Login / Logout =====
+    const btnLogin = document.getElementById("btn-login");
+    btnLogin.addEventListener("click", async () => {
+      const email = document.getElementById("login-email").value.trim();
+      const pass = document.getElementById("login-pass").value;
+      const msgEl = document.getElementById("login-msg");
+      clearMessage(msgEl);
+
+      if (!email || !pass) {
+        showMessage(msgEl, "Please enter email and password.", true);
+        return;
+      }
+
+      try {
+        const cred = await signInWithEmailAndPassword(auth, email, pass);
+        const user = cred.user;
+        if (!user.emailVerified) {
+          showMessage(
+            msgEl,
+            "Your email is not verified. Please check your inbox and verify, then log in again.",
+            true
+          );
+          await signOut(auth);
+          return;
+        }
+        // onAuthStateChanged will handle the rest
+      } catch (err) {
+        console.error(err);
+        showMessage(msgEl, err.message || "Login failed.", true);
+      }
+    });
+
+    const btnLogout = document.getElementById("btn-logout");
+    btnLogout.addEventListener("click", async () => {
+      await signOut(auth);
+    });
+
+    // ===== 6) Auth state listener =====
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        currentUserProfile = null;
+        showAuthUI();
+        return;
+      }
+
+      // Load profile
+      const userDocRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userDocRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        currentUserProfile = {
+          uid: user.uid,
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          phone: data.phone,
+          isAdmin: !!data.isAdmin
+        };
+      } else {
+        // If for some reason profile missing, create a basic one
+        currentUserProfile = {
+          uid: user.uid,
+          email: user.email,
+          firstName: "",
+          lastName: "",
+          phone: "",
+          isAdmin: false
+        };
+        await setDoc(userDocRef, {
+          email: user.email,
+          firstName: "",
+          lastName: "",
+          phone: "",
+          isAdmin: false,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      showAppUI();
+      loadEvents();
+      loadMyHours();
+    });
+
+    // ===== 7) Admin – Create events =====
+    document.getElementById("btn-add-shift").addEventListener("click", () => {
+      addShiftRow();
+    });
+
+    document.getElementById("btn-create-event").addEventListener("click", async () => {
+      if (!currentUserProfile || !currentUserProfile.isAdmin) {
+        alert("Only admins can create events.");
+        return;
+      }
+      const title = document.getElementById("ev-title").value.trim();
+      const desc = document.getElementById("ev-desc").value.trim();
+      const date = document.getElementById("ev-date").value.trim();
+      const loc = document.getElementById("ev-location").value.trim();
+      const multi = document.getElementById("ev-multi").checked;
+      const msgEl = document.getElementById("admin-msg");
+      clearMessage(msgEl);
+
+      if (!title) {
+        showMessage(msgEl, "Title is required.", true);
+        return;
+      }
+
+      // Collect shifts
+      const shiftRows = document.querySelectorAll("#shift-list .flex-row");
+      const shifts = [];
+      shiftRows.forEach(row => {
+        const role = row.querySelector(".shift-role").value.trim();
+        const start = row.querySelector(".shift-start").value.trim();
+        const end = row.querySelector(".shift-end").value.trim();
+        const hoursVal = row.querySelector(".shift-hours").value;
+        if (role || start || end || hoursVal) {
+          const hours = parseFloat(hoursVal || "0");
+          shifts.push({ role: role || "Volunteer", start, end, hours });
+        }
+      });
+
+      // If not multi and no shifts defined, create a default single shift
+      if (!multi && shifts.length === 0) {
+        shifts.push({ role: "Volunteer", start: "", end: "", hours: 0 });
+      }
+
+      try {
+        await addDoc(collection(db, "events"), {
+          title,
+          description: desc,
+          date,
+          location: loc,
+          shifts,
+          createdAt: new Date().toISOString()
+        });
+        showMessage(msgEl, "Event created.", false);
+
+        // Clear form
+        document.getElementById("ev-title").value = "";
+        document.getElementById("ev-desc").value = "";
+        document.getElementById("ev-date").value = "";
+        document.getElementById("ev-location").value = "";
+        document.getElementById("ev-multi").checked = false;
+        document.getElementById("shift-list").innerHTML = "";
+
+        loadEvents();
+      } catch (err) {
+        console.error(err);
+        showMessage(msgEl, err.message || "Error creating event.", true);
+      }
+    });
+
+    // ===== 8) Load events & signup =====
+    async function loadEvents() {
+      const container = document.getElementById("events-list");
+      container.textContent = "Loading events...";
+
+      try {
+        const snap = await getDocs(collection(db, "events"));
+        const events = [];
+        snap.forEach(docSnap => {
+          events.push({ id: docSnap.id, ...docSnap.data() });
+        });
+
+        if (events.length === 0) {
+          container.textContent = "No events yet.";
+          return;
+        }
+
+        container.innerHTML = "";
+        events.forEach(ev => {
+          const card = document.createElement("div");
+          card.className = "card";
+
+          let html = `
+            <h3>${ev.title}</h3>
+            <p><strong>Date:</strong> ${ev.date || "N/A"}</p>
+            <p><strong>Location:</strong> ${ev.location || "N/A"}</p>
+            <p>${ev.description || ""}</p>
+          `;
+
+          const shifts = ev.shifts || [];
+          if (shifts.length > 0) {
+            html += `
+              <table>
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Hours</th>
+                    <th>Sign Up</th>
+                  </tr>
+                </thead>
+                <tbody>
+            `;
+            shifts.forEach((sh, idx) => {
+              html += `
+                <tr>
+                  <td>${sh.role || "Volunteer"}</td>
+                  <td>${sh.start || ""}</td>
+                  <td>${sh.end || ""}</td>
+                  <td>${sh.hours ?? 0}</td>
+                  <td><button class="btn-signup" data-ev="${ev.id}" data-idx="${idx}">Sign Up</button></td>
+                </tr>
+              `;
+            });
+            html += `</tbody></table>`;
+          } else {
+            html += `
+              <p>This event has a single general shift.</p>
+              <button class="btn-signup-general" data-ev="${ev.id}">Sign Up</button>
+            `;
+          }
+
+          card.innerHTML = html;
+          container.appendChild(card);
+        });
+
+        // Attach handlers
+        document.querySelectorAll(".btn-signup").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const evId = btn.getAttribute("data-ev");
+            const idx = parseInt(btn.getAttribute("data-idx"), 10);
+            const ev = events.find(e => e.id === evId);
+            const sh = (ev.shifts || [])[idx];
+            await signupForShift(ev, sh);
+          });
+        });
+
+        document.querySelectorAll(".btn-signup-general").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const evId = btn.getAttribute("data-ev");
+            const ev = events.find(e => e.id === evId);
+            const sh = { role: "Volunteer", start: "", end: "", hours: 0 };
+            await signupForShift(ev, sh);
+          });
+        });
+
+      } catch (err) {
+        console.error(err);
+        container.textContent = "Error loading events.";
+      }
+    }
+
+    async function signupForShift(eventObj, shift) {
+      if (!currentUserProfile) {
+        alert("You must be logged in to sign up.");
+        return;
+      }
+      const msg =
+        `Sign up for "${eventObj.title}" as "${shift.role || "Volunteer"}"?`;
+      if (!confirm(msg)) return;
+
+      try {
+        await addDoc(collection(db, "signups"), {
+          userId: currentUserProfile.uid,
+          userEmail: currentUserProfile.email,
+          eventId: eventObj.id,
+          eventTitle: eventObj.title,
+          role: shift.role || "Volunteer",
+          start: shift.start || "",
+          end: shift.end || "",
+          hours: shift.hours ?? 0,
+          createdAt: new Date().toISOString()
+        });
+        alert("Signed up successfully.");
+        loadMyHours();
+      } catch (err) {
+        console.error(err);
+        alert("Error signing up: " + (err.message || ""));
+      }
+    }
+
+    // ===== 9) Total hours for user =====
+    async function loadMyHours() {
+      if (!currentUserProfile) return;
+      const el = document.getElementById("hours-display");
+      el.textContent = "Loading your total hours...";
+
+      try {
+        const qSignups = query(
+          collection(db, "signups"),
+          where("userId", "==", currentUserProfile.uid)
+        );
+        const snap = await getDocs(qSignups);
+        let total = 0;
+        snap.forEach(docSnap => {
+          const data = docSnap.data();
+          const h = parseFloat(data.hours || 0);
+          total += isNaN(h) ? 0 : h;
+        });
+        el.textContent = `Total hours volunteered: ${total}`;
+      } catch (err) {
+        console.error(err);
+        el.textContent = "Unable to load your hours.";
+      }
+    }
+
+    // ===== 10) Initial UI state =====
+    // Show auth by default. onAuthStateChanged will flip it if logged in.
+    showAuthUI();
+  </script>
+</body>
+</html>
