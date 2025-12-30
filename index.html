@@ -358,12 +358,23 @@
           createdAt: new Date().toISOString()
         });
 
-        // Send verification email
-        await sendEmailVerification(user);
+        try {
+          await sendEmailVerification(user);
+        } catch (e) {
+          console.error(e);
+          showMessage(
+            msgEl,
+            "Account created, but verification email failed to send. Try logging in to resend it.",
+            true
+          );
+        }
 
+        // Force logout so they can’t enter the app yet
+        await signOut(auth);
+        
         showMessage(
           msgEl,
-          "Account created. Please check your email and click the verification link before logging in.",
+          "Account created. We sent you a verification email. Check Inbox/Spam, click the link, then log in.",
           false
         );
       } catch (err) {
@@ -428,6 +439,12 @@
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         currentUserProfile = null;
+        showAuthUI();
+        return;
+      }
+      // Block unverified users from accessing the app
+      if (!user.emailVerified) {
+        await signOut(auth);
         showAuthUI();
         return;
       }
@@ -691,4 +708,5 @@
   </script>
 </body>
 </html>
+
 
