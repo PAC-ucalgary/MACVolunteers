@@ -232,6 +232,12 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    
+    const actionCodeSettings = {
+        url: "https://pac-ucalgary.github.io/MACVolunteers/", // change if you use a custom domain
+        handleCodeInApp: false,
+      };
+
 
     // ===== 2) Global state =====
     let currentUserProfile = null; // {uid, email, firstName, lastName, isAdmin, phone}
@@ -359,7 +365,7 @@
         });
 
         try {
-          await sendEmailVerification(user);
+          await sendEmailVerification(user, actionCodeSettings);
         } catch (e) {
           console.error(e);
           showMessage(
@@ -403,10 +409,10 @@
       try {
         const cred = await signInWithEmailAndPassword(auth, email, pass);
         const user = cred.user;
-    
+        await user.reload();
         if (!user.emailVerified) {
           // Send (or resend) verification email
-          await sendEmailVerification(user);
+          await sendEmailVerification(user, actionCodeSettings);
           showMessage(
             msgEl,
             "Your email is not verified. We've just sent you a new verification email. " +
@@ -442,6 +448,8 @@
         showAuthUI();
         return;
       }
+
+      await user.reload();
       // Block unverified users from accessing the app
       if (!user.emailVerified) {
         await signOut(auth);
@@ -708,5 +716,6 @@
   </script>
 </body>
 </html>
+
 
 
